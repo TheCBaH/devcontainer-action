@@ -44,12 +44,17 @@ runs:
         echo "::group::cache"
         npm install -g @devcontainers/cli
         PLATFORM='${{ inputs.platform }}'
-        if [ -n "$PLATFORM" ]; then
-          ARCH=$(echo "$PLATFORM" | sed 's|linux/||; s|/||g')
-          export DOCKER_DEFAULT_PLATFORM="$PLATFORM"
-        else
-          ARCH=$(uname -m)
+        if [ -z "$PLATFORM" ]; then
+          case "$(uname -m)" in
+            aarch64|arm64) PLATFORM=linux/arm64 ;;
+            armv7l|armv6l|arm) PLATFORM=linux/arm/v7 ;;
+            i686|i386) PLATFORM=linux/386 ;;
+            *) PLATFORM=linux/amd64 ;;
+          esac
         fi
+        export PLATFORM
+        export DOCKER_DEFAULT_PLATFORM="$PLATFORM"
+        ARCH=$(echo "$PLATFORM" | sed 's|linux/||; s|/||g')
         VARIANT='${{ inputs.variant }}'
         VARIANT_SUFFIX="${VARIANT:+-${VARIANT}}"
         IMAGE_ID=${{ inputs.registry }}/$GITHUB_REPOSITORY/${{ inputs.name }}${VARIANT_SUFFIX}-${ARCH}
@@ -65,10 +70,15 @@ runs:
           old_id=$(docker image inspect $IMAGE_ID:$TAG --format "{{.ID}}")
         fi
         echo "::group::build"
-        env BUILDKIT_PROGRESS=plain devcontainer build --image-name $IMAGE_ID --cache-from $IMAGE_ID:$TAG --workspace-folder . $CONFIG_ARG
+        env BUILDKIT_PROGRESS=plain devcontainer build --image-name $IMAGE_ID --cache-from $IMAGE_ID:$TAG --platform "$PLATFORM" --workspace-folder . $CONFIG_ARG
         echo "::group::up"
         env BUILDKIT_PROGRESS=plain devcontainer up --workspace-folder . $CONFIG_ARG
-        echo "EXEC=devcontainer exec --workspace-folder . $CONFIG_ARG" >> $GITHUB_OUTPUT
+        # PLATFORM is passed through to commands run via the exec prefix too
+        # (e.g. `devcontainer exec ...`), so callers can act on the target
+        # platform inside the container without re-deriving it from `uname`,
+        # which is unreliable there for a non-native platform (a 32-bit
+        # container on a 64-bit host still reports the host's machine type).
+        echo "EXEC=devcontainer exec --remote-env PLATFORM=$PLATFORM --workspace-folder . $CONFIG_ARG" >> $GITHUB_OUTPUT
         if [ -n '${{ inputs.password }}' -a -z "${GITHUB_BASE_REF:-}" ]; then
           echo "::group::push"
           new_id=$(docker image inspect $IMAGE_ID --format "{{.ID}}")
