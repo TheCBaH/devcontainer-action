@@ -11,7 +11,7 @@ inputs:
     required: false
     default: ''
   platform:
-    description: 'Target platform for the build (e.g. linux/amd64, linux/i386, linux/arm64, linux/arm/v7); empty means native'
+    description: 'Target platform for the build (e.g. linux/amd64, linux/i386, linux/arm64, linux/arm/v7, linux/s390x); empty means native'
     required: false
     default: ''
   config:
@@ -37,6 +37,11 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: set up QEMU for s390x
+      if: ${{ inputs.platform == 'linux/s390x' }}
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: s390x
     - name: devcontainer setup
       shell: bash
       id: setup
@@ -49,11 +54,16 @@ runs:
             aarch64|arm64) PLATFORM=linux/arm64 ;;
             armv7l|armv6l|arm) PLATFORM=linux/arm/v7 ;;
             i686|i386) PLATFORM=linux/386 ;;
+            s390x) PLATFORM=linux/s390x ;;
             *) PLATFORM=linux/amd64 ;;
           esac
         fi
         export PLATFORM
         export DOCKER_DEFAULT_PLATFORM="$PLATFORM"
+        if [ "$PLATFORM" = linux/s390x ]; then
+          docker run --rm --platform linux/s390x debian:13 \
+            sh -ceu 'test "$(dpkg --print-architecture)" = s390x'
+        fi
         ARCH=$(echo "$PLATFORM" | sed 's|linux/||; s|/||g')
         VARIANT='${{ inputs.variant }}'
         VARIANT_SUFFIX="${VARIANT:+-${VARIANT}}"
