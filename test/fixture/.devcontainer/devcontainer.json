@@ -1,0 +1,5 @@
+{
+    "name": "devcontainer-action test fixture",
+    "image": "mcr.microsoft.com/devcontainers/base:debian",
+    "postCreateCommand": "touch /tmp/post-create-ran"
+}

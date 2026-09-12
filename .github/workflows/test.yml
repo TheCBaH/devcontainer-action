@@ -1,0 +1,91 @@
+name: test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: place fixture at workspace root
+        run: cp -r test/fixture/.devcontainer .
+      - name: first build (cold cache)
+        id: cold
+        uses: ./devcontainer
+        with:
+          name: fixture
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: assert exec works
+        run: ${{ steps.cold.outputs.exec }} test -f /etc/os-release
+      - name: assert post-create ran
+        run: ${{ steps.cold.outputs.exec }} test -f /tmp/post-create-ran
+      - name: second build (warm cache)
+        id: warm
+        uses: ./devcontainer
+        with:
+          name: fixture
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: assert exec still works after cache hit
+        run: ${{ steps.warm.outputs.exec }} test -f /etc/os-release
+
+  post-create-skip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: place fixture at workspace root
+        run: cp -r test/fixture/.devcontainer .
+      - name: build with post-create disabled
+        id: devcontainer
+        uses: ./devcontainer
+        with:
+          name: fixture-no-post-create
+          post-create: 'false'
+          username: ''
+          password: ''
+      - name: assert post-create did not run
+        run: |
+          if ${{ steps.devcontainer.outputs.exec }} test -f /tmp/post-create-ran; then
+            echo "::error ::postCreateCommand ran despite post-create: false"
+            exit 1
+          fi
+
+  cli-version-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: place fixture at workspace root
+        run: cp -r test/fixture/.devcontainer .
+      - name: build with pinned CLI version
+        uses: ./devcontainer
+        with:
+          name: fixture-cli-pin
+          cli-version: '0.88.0'
+          username: ''
+          password: ''
+      - name: assert pinned CLI version installed
+        run: |
+          test "$(devcontainer --version)" = "0.88.0"
+
+  config-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: build against alternate config path
+        id: devcontainer
+        uses: ./devcontainer
+        with:
+          name: fixture-alt-config
+          config: test/fixture/alt/devcontainer.json
+          username: ''
+          password: ''
+      - name: assert exec works
+        run: ${{ steps.devcontainer.outputs.exec }} test -f /etc/os-release
