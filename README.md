@@ -20,6 +20,22 @@ See [`devcontainer/action.yml`](devcontainer/action.yml) for the full input
 list (`name`, `variant`, `platform`, `config`, `registry`, `username`,
 `password`, `post-create`, `cli-version`) and their defaults.
 
+### Recommended: separate build/publish and consume jobs
+
+Run two workflows/jobs against the same action:
+
+- A **publish** job (e.g. `images.yml`, triggered on push) that sets
+  `username`/`password` so it builds *and pushes* the image.
+- A **consume** job (e.g. `build.yml`'s test matrix, triggered on push and
+  PRs) that omits `username`/`password` entirely. It still runs
+  `devcontainer build`, but `--cache-from` pulls the layers the publish job
+  already pushed, so it's fast and never needs registry write access —
+  important for jobs that also run on pull requests from forks.
+
+`username`/`password` are declared `required: true` only as documentation;
+composite actions don't enforce it, so omitting both is how a consume-only
+job opts out of pushing.
+
 ## History
 
 Extracted from `TheCBaH/ocaml-devcontainer`, where this action originated
