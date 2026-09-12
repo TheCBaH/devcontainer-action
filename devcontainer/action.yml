@@ -28,6 +28,14 @@ inputs:
   password:
     description: 'Password or personal access token used to log against the Docker registry'
     required: true
+  post-create:
+    description: 'Whether to run the devcontainer lifecycle commands (postCreateCommand and friends)'
+    required: false
+    default: 'true'
+  cli-version:
+    description: 'Version of @devcontainers/cli to install; empty installs latest'
+    required: false
+    default: ''
 
 outputs:
   exec:
@@ -47,7 +55,8 @@ runs:
       id: setup
       run: |
         echo "::group::cache"
-        npm install -g @devcontainers/cli
+        CLI_VERSION='${{ inputs.cli-version }}'
+        npm install -g @devcontainers/cli${CLI_VERSION:+@${CLI_VERSION}}
         PLATFORM='${{ inputs.platform }}'
         if [ -z "$PLATFORM" ]; then
           case "$(uname -m)" in
@@ -93,7 +102,11 @@ runs:
         echo "::group::build"
         env BUILDKIT_PROGRESS=plain devcontainer build --image-name $IMAGE_ID $CACHE_ARGS --platform "$PLATFORM" --workspace-folder . $CONFIG_ARG
         echo "::group::up"
-        env BUILDKIT_PROGRESS=plain devcontainer up --workspace-folder . $CONFIG_ARG
+        UP_ARGS=""
+        if [ '${{ inputs.post-create }}' = 'false' ]; then
+          UP_ARGS="--skip-post-create"
+        fi
+        env BUILDKIT_PROGRESS=plain devcontainer up --workspace-folder . $CONFIG_ARG $UP_ARGS
         # PLATFORM is passed through to commands run via the exec prefix too
         # (e.g. `devcontainer exec ...`), so callers can act on the target
         # platform inside the container without re-deriving it from `uname`,
