@@ -1,4 +1,4 @@
 {
     "name": "devcontainer-action test fixture (alt config path)",
-    "image": "mcr.microsoft.com/devcontainers/base:debian"
+    "image": "debian:trixie"
 }

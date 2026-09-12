@@ -75,6 +75,45 @@ jobs:
         run: |
           test "$(devcontainer --version)" = "0.88.0"
 
+  architectures:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux/amd64
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: linux/i386
+            arch: i386
+          - os: ubuntu-24.04-arm
+            platform: linux/arm/v7
+            arch: armhf
+          - os: ubuntu-24.04
+            platform: linux/s390x
+            arch: s390x
+    steps:
+      - uses: actions/checkout@v7
+      - name: place fixture at workspace root
+        run: cp -r test/fixture/.devcontainer .
+      - name: build for ${{ matrix.platform }}
+        id: devcontainer
+        uses: ./devcontainer
+        with:
+          name: fixture-arch
+          platform: ${{ matrix.platform }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: assert built for ${{ matrix.arch }}
+        run: |
+          ${{ steps.devcontainer.outputs.exec }} sh -ceu '
+            test "$(dpkg --print-architecture)" = "${{ matrix.arch }}"
+          '
+
   config-input:
     runs-on: ubuntu-latest
     steps:

@@ -1,5 +1,5 @@
 {
     "name": "devcontainer-action test fixture",
-    "image": "mcr.microsoft.com/devcontainers/base:debian",
+    "image": "debian:trixie",
     "postCreateCommand": "touch /tmp/post-create-ran"
 }
