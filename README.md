@@ -49,3 +49,93 @@ design behind the move.
 no features) used by `.github/workflows/test.yml` so CI exercises the
 action's own logic — build, cache reuse, `post-create`, `cli-version`,
 `config` — without paying for a real consumer's build.
+
+## Without Docker: `host/devcontainer_host.py`
+
+Applies a `devcontainer.json` directly to the current machine, for
+environments that have no Docker but should match the devcontainer, such as
+Claude Code cloud environments or a throwaway VM. It is a single Python 3
+file with no dependencies beyond the standard library.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/TheCBaH/devcontainer-action/main/host/devcontainer_host.py |
+    sudo python3 - --workspace-folder path/to/project
+```
+
+It replays, as root and in this order:
+
+1. **The Dockerfile's target stage**: `ARG`, `ENV`, `WORKDIR`, `SHELL`, `RUN`
+   (shell, exec and heredoc forms), `COPY`/`ADD` from the build context, with
+   `build.args` and `build.target` applied. `FROM` is not pulled, so the host
+   stands in for the base image; a Debian image on an Ubuntu host is reported.
+   For an `image`-only configuration there is nothing to replay.
+2. **Features**, from an OCI registry (anonymous token auth, honouring
+   `devcontainer-lock.json`), a local directory or a tarball URL, in
+   `dependsOn`/`installsAfter`/`overrideFeatureInstallOrder` order. Options are
+   exported to `install.sh` the way the CLI does, and each feature's
+   `containerEnv` applies to everything after it. When a `ghcr.io` download
+   fails, the feature's source is taken from the matching GitHub repository
+   (`ghcr.io/OWNER/REPO/ID` -> `github.com/OWNER/REPO`, `src/ID`).
+3. **Lifecycle commands**: `initializeCommand`, then `onCreateCommand`,
+   `updateContentCommand`, `postCreateCommand`, `postStartCommand` and
+   `postAttachCommand`, each features' before the config's own, with the
+   environment `userEnvProbe` finds in shell rc files, as in a container.
+
+Supported variables: `${localEnv:VAR[:default]}`, `${containerEnv:VAR[:default]}`,
+`${localWorkspaceFolder}`, `${containerWorkspaceFolder}` (the same folder
+here), their `Basename` forms and `${devcontainerId}`.
+
+### Host differences
+
+- Everything runs as root. `remoteUser`, `USER` and the container user are
+  reported and ignored, and `sudo` in lifecycle commands still works where
+  sudo is not installed.
+- Skipped by default: `common-utils` (creates the container user),
+  `docker-outside-of-docker` and `docker-in-docker`. Use `--skip-feature ID`
+  for more, or `--no-default-skips`.
+- `userdel`, `deluser`, `groupdel` and `delgroup` are no-ops in the scripts
+  this tool runs: Dockerfiles often remove the base image's default user,
+  which on a host is a real account.
+- Container-only settings (`runArgs`, `mounts`, `privileged`, `capAdd`,
+  ports, `hostRequirements`, ...) are reported and ignored. Docker Compose
+  configurations and `COPY --from` are not supported.
+- Environment from `ENV`, `containerEnv` and `remoteEnv` is written to
+  `/etc/profile.d/devcontainer-host.sh`, which `/etc/bash.bashrc` also
+  sources. `--env-file FILE` additionally writes the full resulting
+  environment (including what features put in shell rc files), for tools
+  whose shells read neither.
+
+### Reruns
+
+Each Dockerfile step is stamped under `/var/lib/devcontainer-host`, keyed on
+everything before it, like Docker's layer cache; each feature is stamped by
+its source digest and options. A rerun skips what is unchanged and runs the
+lifecycle commands again. `--force` ignores the stamps; `--dry-run` resolves
+and fetches everything, prints the plan and changes nothing.
+
+### Claude Code cloud environments
+
+Set the environment's setup script to provision whichever project the
+session cloned:
+
+```sh
+#!/bin/bash
+set -euo pipefail
+curl -fsSL https://raw.githubusercontent.com/TheCBaH/devcontainer-action/main/host/devcontainer_host.py \
+    -o /tmp/devcontainer_host.py
+for dir in /home/user/*/; do
+    if [ -f "$dir.devcontainer/devcontainer.json" ] || [ -f "$dir.devcontainer.json" ]; then
+        python3 /tmp/devcontainer_host.py --workspace-folder "$dir"
+    fi
+done
+```
+
+The environment's network access has to allow what the Dockerfile and
+features download (for example `ghcr.io` and `pkg-containers.githubusercontent.com`
+for features, `opam.ocaml.org` for the OCaml feature).
+
+`test/host` holds the unit tests and an integration fixture:
+
+```sh
+sudo python3 test/host/test_devcontainer_host.py
+```

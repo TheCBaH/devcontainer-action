@@ -128,3 +128,22 @@ jobs:
           password: ''
       - name: assert exec works
         run: ${{ steps.devcontainer.outputs.exec }} test -f /etc/os-release
+
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: unit and fixture tests
+        run: sudo python3 test/host/test_devcontainer_host.py
+      - name: dry run against the action's own fixture
+        run: python3 host/devcontainer_host.py --workspace-folder test/fixture --dry-run
+      - name: apply the action's own fixture
+        run: sudo python3 host/devcontainer_host.py --workspace-folder test/fixture
+      - name: assert it applied
+        run: |
+          test -f /tmp/post-create-ran
+          command -v sshd
