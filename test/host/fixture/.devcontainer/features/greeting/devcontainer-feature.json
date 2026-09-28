@@ -1,0 +1,16 @@
+{
+    "id": "greeting",
+    "version": "1.0.0",
+    "name": "Greeting",
+    "options": {
+        "message": {"type": "string", "default": "hi"},
+        "loud": {"type": "boolean", "default": false},
+        "extra-words": {"type": "string", "default": "default words"}
+    },
+    "containerEnv": {
+        "GREETING": "greeting-feature",
+        "PATH": "/opt/greeting/bin:${PATH}"
+    },
+    "postCreateCommand": "echo feature-postCreate >> \"$FIXTURE_ROOT/lifecycle\"",
+    "installsAfter": ["ghcr.io/devcontainers/features/common-utils"]
+}

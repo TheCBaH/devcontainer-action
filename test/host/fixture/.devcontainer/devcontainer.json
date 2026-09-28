@@ -1,0 +1,35 @@
+// devcontainer-host integration fixture: exercises the Dockerfile replay,
+// a local feature, config variables and every lifecycle hook.
+{
+    "name": "devcontainer-host fixture",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "args": {
+            "GREETING_DIR": "${localEnv:FIXTURE_ROOT:/tmp/dch-fixture}",
+            /* block comment */
+            "FROM_CONFIG": "yes",
+        },
+    },
+    "features": {
+        "./features/greeting": {
+            "message": "hello from ${localWorkspaceFolderBasename}",
+            "loud": true
+        },
+        "ghcr.io/devcontainers/features/common-utils:2": {}
+    },
+    "containerEnv": {
+        "FIXTURE_CONTAINER_ENV": "container"
+    },
+    "remoteEnv": {
+        "FIXTURE_REMOTE_ENV": "remote-${containerEnv:FIXTURE_CONTAINER_ENV}"
+    },
+    "remoteUser": "vscode",
+    "runArgs": ["--init"],
+    "initializeCommand": "echo initialize > \"$FIXTURE_ROOT/lifecycle\"",
+    "onCreateCommand": ["sh", "-c", "echo onCreate >> \"$FIXTURE_ROOT/lifecycle\""],
+    "postCreateCommand": {
+        "env": "echo \"$FIXTURE_REMOTE_ENV $GREETING $FIXTURE_ENV\" > \"$FIXTURE_ROOT/env\"",
+        "sudo": "sudo -E sh -c 'echo postCreate >> \"$FIXTURE_ROOT/lifecycle\"'"
+    },
+    "postStartCommand": "echo postStart >> \"$FIXTURE_ROOT/lifecycle\""
+}
